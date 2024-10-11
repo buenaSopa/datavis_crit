@@ -1,0 +1,524 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Australian Shark Incidents: A Deep Dive</title>
+    <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e6f2ff;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #003366;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #0066cc;
+            text-align: center;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .intro {
+            text-align: justify;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .chart {
+            margin-bottom: 50px;
+        }
+        .chart-title {
+            color: #003366;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        .shark-icon {
+            font-size: 30px;
+            margin: 0 10px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="shark-icon">🦈</span>Australian Shark Incidents: A Deep Dive<span class="shark-icon">🦈</span></h1>
+        <h2>Exploring the Waters of the Shark Capital of the World</h2>
+        
+        <div class="intro">
+            <p>Australia, with its vast coastline and rich marine ecosystems, is often referred to as the "Shark Capital of the World." While shark encounters are rare, they capture our imagination and sometimes make headlines. This visualization offers an in-depth look at shark incidents across Australia, providing insights into their distribution, frequency, and characteristics.</p>
+        </div>
+
+        <div id="choropleth" class="chart">
+            <h3 class="chart-title">Normalized Shark Incidents by State</h3>
+        </div>
+        
+        <div id="dotplot" class="chart">
+            <h3 class="chart-title">Individual Shark Incident Locations</h3>
+        </div>
+
+        <div id="site-category" class="chart">
+            <h3 class="chart-title">Shark Incidents by Site Category</h3>
+        </div>
+
+        <div id="victim-activity" class="chart">
+            <h3 class="chart-title">Shark Incidents by Victim Activity</h3>
+        </div>
+    </div>
+
+    <script>
+        const stateData = [
+            {"state": "New South Wales", "latitude": -32.163333, "longitude": 147.016667, "code": "NSW"},
+            {"state": "Victoria", "latitude": -37.020833, "longitude": 144.964722, "code": "VIC"},
+            {"state": "Queensland", "latitude": -22.486944, "longitude": 144.431667, "code": "QLD"},
+            {"state": "Western Australia", "latitude": -25.328055, "longitude": 122.298333, "code": "WA"},
+            {"state": "South Australia", "latitude": -30.000833, "longitude": 135.759444, "code": "SA"},
+            {"state": "Tasmania", "latitude": -42.021389, "longitude": 146.593333, "code": "TAS"},
+            {"state": "Northern Territory", "latitude": -19.491389, "longitude": 132.550556, "code": "NT"},
+        ];
+
+        const baseMapLayer = {
+            "data": {
+                "url": "https://raw.githubusercontent.com/techslides/D3-Maps/refs/heads/master/data/world/country/Australia.topo.json",
+                "format": {"type": "topojson", "feature": "map"}
+            },
+            "mark": {"type": "geoshape", "fill": "#DCDCDC", "stroke": "white", "strokeWidth": 1}
+        };
+
+        const oceanLayer = {
+            "mark": {"type": "rect", "color": "#b3d9ff"},
+            "encoding": {
+                "x": {"value": 0},
+                "x2": {"value": {"signal": "width"}},
+                "y": {"value": 0},
+                "y2": {"value": {"signal": "height"}}
+            }
+        };
+
+const choroplethSpec = {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "width": 800,
+    "height": 600,
+    "projection": {
+        "type": "mercator",
+        "center": [133, -28],
+        "scale": 800
+    },
+    "layer": [
+			baseMapLayer,
+        {
+            "data": {
+                "url": "https://raw.githubusercontent.com/buenaSopa/monash_datavis/main/shark.csv"
+            },
+            "transform": [
+                {
+                    "filter": "datum.sharkCommonName != null && datum.sharkCommonName != ''" // Ensure shark type is not null
+                },
+                {
+                    "filter": "sharkSelect == null || datum.sharkCommonName == sharkSelect" // Filter by selected shark
+                },
+                {
+                    "calculate": "datum.state === 'NSW' ? 'New South Wales' : datum.state === 'QLD' ? 'Queensland' : datum.state === 'VIC' ? 'Victoria' : datum.state === 'WA' ? 'Western Australia' : datum.state === 'SA' ? 'South Australia' : datum.state === 'TAS' ? 'Tasmania' : datum.state === 'NT' ? 'Northern Territory' : datum.state",
+                    "as": "full_state_name"
+                },
+                {
+                    "aggregate": [{"op": "count", "as": "incident_count"}],
+                    "groupby": ["full_state_name"]
+                },
+                {
+                    "joinaggregate": [
+                        {
+                            "op": "sum",
+                            "field": "incident_count",
+                            "as": "total_incidents"
+                        }
+                    ]
+                },
+                {
+                    "calculate": "datum.incident_count / datum.total_incidents",
+                    "as": "normalized_count"
+                },
+                {
+                    "lookup": "full_state_name",
+                    "from": {
+                        "data": {
+                            "url": "https://raw.githubusercontent.com/techslides/D3-Maps/refs/heads/master/data/world/country/Australia.topo.json",
+                            "format": {"type": "topojson", "feature": "map"}
+                        },
+                        "key": "properties.name",
+                        "fields": ["type", "properties", "geometry"]
+                    }
+                }
+            ],
+            "mark": {"type": "geoshape", "stroke": "white", "strokeWidth": 1},
+            "encoding": {
+                "color": {
+                    "field": "normalized_count",
+                    "type": "quantitative",
+                    "scale": {"scheme": "blues"},
+                    "legend": {"title": "Normalized Shark Incidents"}
+                },
+                "tooltip": [
+                    {"field": "full_state_name", "type": "nominal", "title": "State"},
+                    {"field": "incident_count", "type": "quantitative", "title": "Number of Shark Incidents"},
+                    {"field": "normalized_count", "type": "quantitative", "title": "Normalized Count", "format": ".2%"}
+                ]
+            }
+        },
+        {
+            "data": {
+                "values": stateData
+            },
+            "mark": {
+                "type": "text",
+                "fontSize": 10,
+                "fontWeight": "bold"
+            },
+            "encoding": {
+                "longitude": {"field": "longitude", "type": "quantitative"},
+                "latitude": {"field": "latitude", "type": "quantitative"},
+                "text": {"field": "state", "type": "nominal"}
+            }
+        }
+    ],
+    "params": [
+        {
+            "name": "sharkSelect",
+            "bind": {
+                "input": "select",
+                "options": [null, "white shark", "tiger shark", "bull shark", "whaler shark", "wobbegong"],
+                "labels": ["All", "White Shark", "Tiger Shark", "Bull Shark", "Whaler Shark", "Wobbegong"],
+                "name": "Shark Type: "
+            }
+        }
+    ]
+};
+
+
+const dotplotSpec = {
+    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+    "width": 800,
+    "height": 600,
+    "projection": {
+        "type": "mercator",
+        "center": [133, -28],
+        "scale": 800
+    },
+    "layer": [
+        oceanLayer,
+        baseMapLayer,
+        {
+            "data": {
+                "url": "https://raw.githubusercontent.com/buenaSopa/monash_datavis/main/shark.csv"
+            },
+            "transform": [
+                {
+                    "filter": "datum.sharkCommonName != null && datum.sharkCommonName != ''" // Ensure shark type is not null
+                },
+                {
+                    "filter": "sharkSelect == null || datum.sharkCommonName == sharkSelect" // Filter by selected shark
+                }
+            ],
+            "mark": {"type": "circle", "opacity": 0.3},
+            "encoding": {
+                "longitude": {"field": "longitude", "type": "quantitative"},
+                "latitude": {"field": "latitude", "type": "quantitative"},
+                "size": {"value": 70},
+                "color": {"field": "sharkCommonName", "type": "nominal", "scale": {"scheme": "category10"}},
+                "tooltip": [
+                    {"field": "incidentYear", "type": "quantitative", "title": "Year"},
+                    {"field": "location", "type": "nominal"},
+                    {"field": "sharkCommonName", "type": "nominal", "title": "Shark Type"},
+                    {"field": "victimInjury", "type": "nominal", "title": "Injury"},
+                    {"field": "victimActivity", "type": "nominal", "title": "Activity"}
+                ]
+            }
+        }
+    ],
+    "params": [
+        {
+            "name": "sharkSelect",
+            "bind": {
+                "input": "select",
+                "options": [null, "white shark", "tiger shark", "bull shark", "whaler shark", "wobbegong"],
+                "labels": ["All", "White Shark", "Tiger Shark", "Bull Shark", "Whaler Shark", "Wobbegong"],
+                "name": "Shark Type: "
+            }
+        }
+    ]
+};
+
+        const siteCategorySpec = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "description": "Stacked bar chart showing shark incidents by site category.",
+            "title": {
+                "text": "Shark Incidents by Site Category",
+                "fontSize": 16,
+                "anchor": "middle",
+                "fontWeight": "bold"
+            },
+            "width": 600,
+            "height": 400,
+            "data": {
+                "url": "https://raw.githubusercontent.com/buenaSopa/monash_datavis/main/shark.csv"
+            },
+            "params": [
+                {
+                    "name": "sharkSelect",
+                    "bind": {
+                        "input": "select",
+                        "options": [null, "white shark", "tiger shark", "bull shark", "whaler shark", "wobbegong"],
+                        "labels": ["All", "White Shark", "Tiger Shark", "Bull Shark", "Whaler Shark", "Wobbegong"],
+                        "name": "Shark Type: "
+                    }
+                }
+            ],
+            "transform": [
+                {
+                    "filter": "datum.sharkCommonName != null && datum.sharkCommonName != ''" 
+                },
+                {
+                    "filter": "sharkSelect == null || datum.sharkCommonName == sharkSelect"
+                },
+                {
+                    "aggregate": [
+                        {
+                            "op": "count",
+                            "as": "incident_count"
+                        }
+                    ],
+                    "groupby": ["siteCategory", "sharkCommonName"]
+                },
+                {
+                    "filter": "datum.incident_count >= 10" 
+                },
+                {
+                    "window": [
+                        {
+                            "op": "sum",
+                            "field": "incident_count",
+                            "as": "total_incident_count"
+                        }
+                    ],
+                    "groupby": ["siteCategory"]
+                }
+            ],
+            "layer": [
+                {
+                    "mark": {
+                        "type": "bar",
+                        "tooltip": true  
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "siteCategory",
+                            "type": "nominal",
+                            "title": "Location Type (Site Category)",
+                            "sort": {
+                                "field": "total_incident_count",
+                                "order": "descending" 
+                            }
+                        },
+                        "y": {
+                            "field": "incident_count",
+                            "type": "quantitative",
+                            "title": "Number of Incidents",
+                            "stack": "zero" 
+                        },
+                        "color": {
+                            "field": "sharkCommonName",
+                            "type": "nominal",
+                            "title": "Shark Type",
+                            "legend": {
+                                "title": "Shark Type",
+                                "orient": "right" 
+                            }
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                        "type": "text",
+                        "align": "center",
+                        "baseline": "middle",
+                        "dy": -5  
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "siteCategory",
+                            "type": "nominal"
+                        },
+                        "y": {
+                            "aggregate": "sum", 
+                            "field": "incident_count",
+                            "type": "quantitative"
+                        },
+                        "text": {
+                            "aggregate": "sum",
+                            "field": "incident_count",
+                            "type": "quantitative"
+                        }
+                    }
+                }
+            ]
+        };
+
+const victimActivitySpec = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "description": "Stacked bar chart showing shark incidents by victim activity.",
+            "title": {
+                "text": "Shark Incidents by Victim Activity",
+                "fontSize": 16,
+                "anchor": "middle",
+                "fontWeight": "bold"
+            },
+            "width": 600,
+            "height": 400,
+            "data": {
+                "url": "https://raw.githubusercontent.com/buenaSopa/monash_datavis/main/shark.csv"
+            },
+            "params": [
+                {
+                    "name": "sharkSelect",
+                    "bind": {
+                        "input": "select",
+                        "options": [null, "white shark", "tiger shark", "bull shark", "whaler shark", "wobbegong"],
+                        "labels": ["All", "White Shark", "Tiger Shark", "Bull Shark", "Whaler Shark", "Wobbegong"],
+                        "name": "Shark Type: "
+                    }
+                }
+            ],
+            "transform": [
+                {
+                    "filter": "datum.sharkCommonName != null && datum.sharkCommonName != ''" 
+                },
+                {
+                    "filter": "sharkSelect == null || datum.sharkCommonName == sharkSelect"
+                },
+                {
+                    "aggregate": [
+                    {
+                        "op": "count",
+                        "as": "incident_count"
+                    }
+                    ],
+                    "groupby": ["victimActivity", "sharkCommonName"]
+                },
+                {
+                    "filter": "datum.incident_count >= 10" 
+                },
+                {
+                    "window": [
+                    {
+                        "op": "sum",
+                        "field": "incident_count",
+                        "as": "total_incident_count"
+                    }
+                    ],
+                    "groupby": ["victimActivity"]
+                }
+            ],
+            "layer": [
+                {
+                    "mark": {
+                    "type": "bar",
+                    "tooltip": true  
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "victimActivity",
+                            "type": "nominal",
+                            "title": "Victim Activity",
+                            "sort": {
+                                "field": "total_incident_count",
+                                "order": "descending" 
+                            }
+                        },
+                        "y": {
+                            "field": "incident_count",
+                            "type": "quantitative",
+                            "title": "Number of Incidents",
+                            "stack": "zero" 
+                        },
+                        "color": {
+                            "field": "sharkCommonName",
+                            "type": "nominal",
+                            "title": "Shark Type",
+                            "legend": {
+                                "title": "Shark Type",
+                                "orient": "right" 
+                            }
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                    "type": "text",
+                    "align": "center",
+                    "baseline": "middle",
+                    "dy": -5  
+                    },
+                    "encoding": {
+                        "x": {
+                        "field": "victimActivity",
+                        "type": "nominal"
+                        },
+                        "y": {
+                        "aggregate": "sum", 
+                        "field": "incident_count",
+                        "type": "quantitative"
+                        },
+                        "text": {
+                        "aggregate": "sum",
+                        "field": "incident_count",
+                        "type": "quantitative"
+                        }
+                    }
+                }
+            ]
+        };
+
+        // Render all charts
+        vegaEmbed('#choropleth', choroplethSpec)
+            .then(result => {
+                console.log("Choropleth Map rendered");
+            })
+            .catch(console.error);
+
+        vegaEmbed('#dotplot', dotplotSpec)
+            .then(result => {
+                console.log("Dot Plot rendered");
+            })
+            .catch(console.error);
+
+        vegaEmbed('#site-category', siteCategorySpec)
+            .then(result => {
+                console.log("Site Category Chart rendered");
+            })
+            .catch(console.error);
+
+        vegaEmbed('#victim-activity', victimActivitySpec)
+            .then(result => {
+                console.log("Victim Activity Chart rendered");
+            })
+            .catch(console.error);
+    </script>
+</body>
+</html>
